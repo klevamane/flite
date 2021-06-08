@@ -1,4 +1,6 @@
 import uuid
+import secrets
+
 from django.db import models
 from django.conf import settings
 from django.dispatch import receiver
@@ -93,6 +95,39 @@ class Balance(BaseModel):
         verbose_name= "Balance"
         verbose_name_plural = "Balances"
 
+    def make_deposit(self, amount):
+        self.available_balance += amount
+        self.book_balance = self.available_balance
+        self.save()
+        self._make_transaction(amount, Deposit, status="complete")
+
+    def _make_transaction(
+            self, amount, klass, **kwargs
+    ):
+        """
+        Creates a transaction with information of
+        passed as attributes passed
+
+        Args:
+            amount(number): The transaction amount
+            klass(class): A model class
+            reference(str): Transaction reference
+            kwargs(dict): Keyword arguments
+        """
+        tnx = klass(
+            owner=self.owner,
+            amount=amount,
+            reference=make_refernce(klass.__name__.capitalize()),
+            **kwargs
+        )
+        tnx.save()
+
+
+def make_refernce(pre, length=11):
+    """Generate a random reference with a starting subject pre"""
+    return "{}{}".format(pre, secrets.token_hex(length))
+
+
 class AllBanks(BaseModel):
 
     name = models.CharField(max_length=100)
@@ -114,12 +149,21 @@ class Bank(models.Model):
     account_number = models.CharField(max_length=50)
     account_type = models.CharField(max_length=50)
 
+
 class Transaction(BaseModel):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='transaction')
     reference = models.CharField(max_length=200)
     status = models.CharField(max_length=200)
     amount = models.FloatField(default=0.0)
     new_balance = models.FloatField(default=0.0)
+
+
+class Deposit(Transaction):
+    pass
+
+
+class Withdrawal(Transaction):
+    pass
 
 
 class BankTransfer(Transaction):

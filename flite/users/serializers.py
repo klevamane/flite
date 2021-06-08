@@ -15,7 +15,7 @@ class CreateUserSerializer(serializers.ModelSerializer):
 
 
     def validate_referral_code(self, code):
-        
+
         self.reffered_profile = UserProfile.objects.filter(referral_code=code.lower())
         is_valid_code = self.reffered_profile.exists()
         if not is_valid_code:
@@ -31,7 +31,7 @@ class CreateUserSerializer(serializers.ModelSerializer):
         referral_code = None
         if 'referral_code' in validated_data:
             referral_code = validated_data.pop('referral_code',None)
-            
+
         user = User.objects.create_user(**validated_data)
 
         if referral_code:
@@ -53,11 +53,11 @@ class CreateUserSerializer(serializers.ModelSerializer):
 class SendNewPhonenumberSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
-        phone_number = validated_data.get("phone_number", None) 
+        phone_number = validated_data.get("phone_number", None)
         email = validated_data.get("email", None)
 
         obj, code = utils.send_mobile_signup_sms(phone_number, email)
-        
+
         return {
             "verification_code":code,
             "id":obj.id
@@ -68,5 +68,17 @@ class SendNewPhonenumberSerializer(serializers.ModelSerializer):
         fields = ('id', 'phone_number', 'verification_code', 'email',)
         extra_kwargs = {'phone_number': {'write_only': True, 'required':True}, 'email': {'write_only': True}, }
         read_only_fields = ('id', 'verification_code')
-        
-    
+
+
+class CreateDepositSerializer(serializers.Serializer):
+    # amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    amount = serializers.FloatField()
+
+    def validate_amount(self, amount):
+        if amount <= 0:
+            raise serializers.ValidationError("Deposit amount must be greater than 0")
+        return amount
+
+    def save(self, user):
+        user.balance.make_deposit(self.validated_data["amount"])
+
