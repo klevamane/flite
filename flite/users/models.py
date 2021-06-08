@@ -1,6 +1,7 @@
 import uuid
 import secrets
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.conf import settings
 from django.dispatch import receiver
@@ -92,14 +93,23 @@ class Balance(BaseModel):
     active = models.BooleanField(default=True)
 
     class Meta:
-        verbose_name= "Balance"
+        verbose_name = "Balance"
         verbose_name_plural = "Balances"
 
     def make_deposit(self, amount):
         self.available_balance += amount
         self.book_balance = self.available_balance
         self.save()
-        self._make_transaction(amount, Deposit, status="complete")
+        self._make_transaction(amount, Deposit, status="complete", new_balance=self.available_balance)
+
+    def make_withdrawal(self, amount):
+        if amount > self.available_balance:
+            raise ValidationError("Insuffient funds")
+        self.available_balance -= amount
+        self.book_balance = self.available_balance
+        self.save()
+        self._make_transaction(amount, Withdrawal, status="complete", new_balance=self.available_balance)
+
 
     def _make_transaction(
             self, amount, klass, **kwargs

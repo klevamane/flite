@@ -82,3 +82,16 @@ class CreateDepositSerializer(serializers.Serializer):
     def save(self, user):
         user.balance.make_deposit(self.validated_data["amount"])
 
+
+class CreateWithdrawalSerializer(serializers.Serializer):
+    # amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    amount = serializers.FloatField()
+
+    def validate_amount(self, amount):
+        if amount <= 0:
+            raise serializers.ValidationError("Deposit amount must be greater than 0")
+        return amount
+
+    def save(self, user):
+        user.balance.make_withdrawal(self.validated_data["amount"])
+

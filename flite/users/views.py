@@ -3,7 +3,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from .models import User, NewUserPhoneVerification, Balance
 from .permissions import IsUserOrReadOnly
-from .serializers import CreateUserSerializer, UserSerializer, SendNewPhonenumberSerializer, CreateDepositSerializer
+from .serializers import CreateUserSerializer, UserSerializer, SendNewPhonenumberSerializer, CreateDepositSerializer, \
+    CreateWithdrawalSerializer
 from rest_framework.views import APIView
 from . import utils
 
@@ -71,4 +72,21 @@ class DepositCreateViewSet(viewsets.ViewSet):
 
         }
         return Response(ctx, status=status.HTTP_201_CREATED)
+
+
+class WithdrawalCreateViewSet(viewsets.ViewSet):
+    permission_classes = (IsUserOrReadOnly,)
+
+    def create(self, request, *args, **kwargs):
+        serializer = CreateWithdrawalSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(request.user)
+        ctx = {
+            "status": "complete",
+            "amount": serializer.data["amount"],
+            "transaction_type": "withdrawal"
+
+        }
+        return Response(ctx, status=status.HTTP_201_CREATED)
+
 

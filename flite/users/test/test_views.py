@@ -39,7 +39,7 @@ class TestUserListTestCase(APITestCase):
         eq_(UserProfile.objects.filter(user__username=self.user_data['username']).exists(),True)
 
     def test_post_request_with_valid_data_succeeds_referral_is_created_if_code_is_valid(self):
-        
+
         referring_user = UserFactory()
         self.user_data.update({"referral_code":referring_user.userprofile.referral_code})
         response = self.client.post(self.url, self.user_data)
@@ -49,11 +49,11 @@ class TestUserListTestCase(APITestCase):
 
 
     def test_post_request_with_valid_data_succeeds_referral_is_not_created_if_code_is_invalid(self):
-        
+
         self.user_data.update({"referral_code":"FAKECODE"})
         response = self.client.post(self.url, self.user_data)
         eq_(response.status_code, status.HTTP_400_BAD_REQUEST)
-        
+
 class TestUserDetailTestCase(APITestCase):
     """
     Tests /users detail operations.
@@ -76,6 +76,7 @@ class TestUserDetailTestCase(APITestCase):
 
         user = User.objects.get(pk=self.user.id)
         eq_(user.first_name, new_first_name)
+
 
 class TestTransactions(APITestCase):
 
