@@ -65,7 +65,7 @@ class NewUserPhoneVerification(BaseModel):
     verification_code = models.CharField(max_length=30)
     is_verified = models.BooleanField(default=False)
     email = models.CharField(max_length=100)
- 
+
     def __str__(self):
         return str(self.phone_number)+'-'+ str(self.verification_code)
 
@@ -84,9 +84,9 @@ class Referral(BaseModel):
 
 class Balance(BaseModel):
 
-    owner = models.ForeignKey(User, on_delete=models.CASCADE)
-    book_balance = models.FloatField(default=0.0) 
-    available_balance = models.FloatField(default=0.0) 
+    owner = models.OneToOneField(User, on_delete=models.CASCADE)
+    book_balance = models.FloatField(default=0.0)
+    available_balance = models.FloatField(default=0.0)
     active = models.BooleanField(default=True)
 
     class Meta:
@@ -98,7 +98,7 @@ class AllBanks(BaseModel):
     name = models.CharField(max_length=100)
     acronym = models.CharField(max_length=50)
     bank_code = models.CharField(max_length=50)
- 
+
     def __str__(self):
         return self.name
 
@@ -113,14 +113,13 @@ class Bank(models.Model):
     account_name = models.CharField(max_length=100)
     account_number = models.CharField(max_length=50)
     account_type = models.CharField(max_length=50)
-    
+
 class Transaction(BaseModel):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='transaction')
     reference = models.CharField(max_length=200)
     status = models.CharField(max_length=200)
     amount = models.FloatField(default=0.0)
     new_balance = models.FloatField(default=0.0)
-
 
 
 class BankTransfer(Transaction):
@@ -140,7 +139,7 @@ class P2PTransfer(Transaction):
 
 
 class Card(models.Model):
-    
+
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
     authorization_code = models.CharField(max_length=200)
     ctype = models.CharField(max_length=200)
@@ -166,4 +165,4 @@ class Card(models.Model):
         self.save()
 
 
-    
+
