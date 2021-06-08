@@ -6,7 +6,7 @@ from django.views.generic.base import RedirectView
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken import views
 from .users.views import UserViewSet, UserCreateViewSet, SendNewPhonenumberVerifyViewSet, DepositCreateViewSet, \
-    WithdrawalCreateViewSet, P2PCreateViewSet, ListTransactionsViewSet
+    WithdrawalCreateViewSet, P2PCreateViewSet, ListTransactionsViewSet, RetrieveTransactionViewSet
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
@@ -21,7 +21,8 @@ urlpatterns = [
     path('api/v1/users/<str:id>/deposits', DepositCreateViewSet.as_view({'post': 'create'})),
     path('api/v1/users/<str:id>/withdrawals', WithdrawalCreateViewSet.as_view({'post': 'create'})),
     path('api/v1/account/<str:sender_account_id>/transfers/<str:recipient_account_id>', P2PCreateViewSet.as_view({'post': 'create'})),
-    path('api/v1/account/<str:id>/transactions', ListTransactionsViewSet.as_view({'get': 'list'})),
+    path('api/v1/account/<str:account_id>/transactions', ListTransactionsViewSet.as_view({'get': 'list'})),
+    path('api/v1/account/transactions/<str:transaction_id>', RetrieveTransactionViewSet.as_view({'get': 'retrieve'})),
     path('api-token-auth/', views.obtain_auth_token),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
 

@@ -160,3 +160,8 @@ class ListTransactionsSerializer(serializers.ModelSerializer):
     def get_type(self, obj):
         return obj.__class__.__name__.lower()
 
+    def validate(self, attrs):
+        print("ATTRIBUTES ")
+
+    # def validate(self, attrs):
+

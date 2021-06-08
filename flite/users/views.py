@@ -1,8 +1,8 @@
 from rest_framework import viewsets, mixins, status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from .models import User, NewUserPhoneVerification, Balance, Transaction
-from .permissions import IsUserOrReadOnly
+from .models import User, NewUserPhoneVerification, Transaction
+from .permissions import IsUserOrReadOnly, OwnerOnlyPermission
 from .serializers import CreateUserSerializer, UserSerializer, SendNewPhonenumberSerializer, CreateDepositSerializer, \
     CreateWithdrawalSerializer, CreateP2PSerializer, ListTransactionsSerializer
 from rest_framework.views import APIView
@@ -59,7 +59,7 @@ class SendNewPhonenumberVerifyViewSet(mixins.CreateModelMixin,mixins.UpdateModel
 
 # class DepositCreateViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
 class DepositCreateViewSet(viewsets.ViewSet):
-    permission_classes = (IsUserOrReadOnly,)
+    permission_classes = (OwnerOnlyPermission,)
 
     def create(self, request, *args, **kwargs):
         serializer = CreateDepositSerializer(data=request.data)
@@ -75,7 +75,7 @@ class DepositCreateViewSet(viewsets.ViewSet):
 
 
 class WithdrawalCreateViewSet(viewsets.ViewSet):
-    permission_classes = (IsUserOrReadOnly,)
+    permission_classes = (OwnerOnlyPermission,)
 
     def create(self, request, *args, **kwargs):
         serializer = CreateWithdrawalSerializer(data=request.data)
@@ -91,7 +91,7 @@ class WithdrawalCreateViewSet(viewsets.ViewSet):
 
 
 class P2PCreateViewSet(viewsets.ViewSet):
-    permission_classes = (IsUserOrReadOnly, )
+    permission_classes = (OwnerOnlyPermission, )
 
     def create(self, request, *args, **kwargs):
         serializer = CreateP2PSerializer(data=request.data)
@@ -108,7 +108,17 @@ class P2PCreateViewSet(viewsets.ViewSet):
 
 class ListTransactionsViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     serializer_class = ListTransactionsSerializer
-    # permission_classes = (IsUserOrReadOnly,)
+    permission_classes = (OwnerOnlyPermission,)
 
     def get_queryset(self):
         return Transaction.objects.filter(owner=self.request.user).select_subclasses()
+
+
+class RetrieveTransactionViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    serializer_class = ListTransactionsSerializer
+    permission_classes = (OwnerOnlyPermission,)
+    lookup_url_kwarg = "transaction_id"
+
+    def get_queryset(self):
+        return Transaction.objects.filter(owner=self.request.user).select_subclasses()
+
