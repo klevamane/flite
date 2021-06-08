@@ -2,7 +2,7 @@ import uuid
 import secrets
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.conf import settings
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser
@@ -12,6 +12,7 @@ from rest_framework.authtoken.models import Token
 from flite.core.models import BaseModel
 from phonenumber_field.modelfields import PhoneNumberField
 from django.utils import timezone
+from model_utils.managers import InheritanceManager
 
 @python_2_unicode_compatible
 class User(AbstractUser):
@@ -100,20 +101,20 @@ class Balance(BaseModel):
         self.available_balance += amount
         self.book_balance = self.available_balance
         self.save()
-        self._make_transaction(amount, Deposit, status="complete", new_balance=self.available_balance)
+        self._make_transaction(
+            amount, Deposit, status="complete", new_balance=self.available_balance
+        )
 
     def make_withdrawal(self, amount):
-        if amount > self.available_balance:
-            raise ValidationError("Insuffient funds")
+        self._can_debit_or_error(amount)
         self.available_balance -= amount
         self.book_balance = self.available_balance
         self.save()
-        self._make_transaction(amount, Withdrawal, status="complete", new_balance=self.available_balance)
+        self._make_transaction(
+            amount, Withdrawal, status="complete", new_balance=self.available_balance
+        )
 
-
-    def _make_transaction(
-            self, amount, klass, **kwargs
-    ):
+    def _make_transaction(self, amount, klass, **kwargs):
         """
         Creates a transaction with information of
         passed as attributes passed
@@ -121,7 +122,6 @@ class Balance(BaseModel):
         Args:
             amount(number): The transaction amount
             klass(class): A model class
-            reference(str): Transaction reference
             kwargs(dict): Keyword arguments
         """
         tnx = klass(
@@ -131,6 +131,36 @@ class Balance(BaseModel):
             **kwargs
         )
         tnx.save()
+
+    def _can_debit_or_error(self, amount):
+        if self.available_balance < amount:
+            raise ValidationError("Insuffient funds")
+
+    def make_p2p_transfer(self, amount, target):
+        self._can_debit_or_error(amount)
+        with transaction.atomic():
+            # lock for update
+            self.get_lock()
+            target.get_lock()
+
+            self.available_balance -= amount
+            target.available_balance += amount
+            self.book_balance -= amount
+            target.book_balance += amount
+            self.save()
+            target.save()
+
+            self._make_transaction(
+                amount,
+                P2PTransfer,
+                sender=self.owner,
+                receipient=target.owner,
+                status="complete",
+                new_balance=self.available_balance,
+            )
+
+    def get_lock(self):
+        Balance.objects.select_for_update().get(id=self.id)
 
 
 def make_refernce(pre, length=11):
@@ -167,6 +197,8 @@ class Transaction(BaseModel):
     amount = models.FloatField(default=0.0)
     new_balance = models.FloatField(default=0.0)
 
+    objects = InheritanceManager()
+
 
 class Deposit(Transaction):
     pass
@@ -189,7 +221,6 @@ class P2PTransfer(Transaction):
 
     class Meta:
         verbose_name_plural = "P2P Transfers"
-
 
 
 class Card(models.Model):
