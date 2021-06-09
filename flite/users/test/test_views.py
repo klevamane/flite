@@ -79,7 +79,6 @@ class TestUserDetailTestCase(APITestCase):
 
 
 class TestTransactions(APITestCase):
-
     def setUp(self):
         self.user = UserFactory()
         self.user2 = UserFactory()
@@ -89,10 +88,13 @@ class TestTransactions(APITestCase):
         self.withdrawal_url = reverse('withdrawal-url', kwargs={'user_id': self.user.pk})
         self.transactions_url = reverse("user-transactions", kwargs={'account_id': self.user.pk})
         self.p2p_transfer_url = reverse('p2p-transfer-url', kwargs={'sender_account_id': self.user.pk, 'recipient_account_id': self.user2.pk})
-        # self.transaction_url = reverse("user-transaction", kwargs={'transaction_id': self.user.pk})
+        self.transaction_url = reverse("user-transaction", kwargs={'transaction_id': self.user.pk})
 
         DepositFactory.create(owner=self.user)
-        self.transaction_url = reverse("user-transaction", kwargs={'transaction_id': self.user.transaction.first().id})
+        self.transaction_url = reverse(
+            "user-transaction",
+            kwargs={"transaction_id": self.user.transaction.first().id},
+        )
 
     def test_user_can_make_a_deposit(self):
         payload = {"amount": 100}
@@ -117,7 +119,6 @@ class TestTransactions(APITestCase):
         eq_(self.user.balance.available_balance, 90)
         eq_(self.user.balance.book_balance, 90)
 
-
     def test_user_can_make_a_p2p_transfer(self):
         self.user.balance.book_balance = 100
         self.user.balance.available_balance = 100
@@ -139,7 +140,6 @@ class TestTransactions(APITestCase):
         eq_(self.user2.balance.book_balance, 70)
         eq_(self.user2.balance.available_balance, 70)
 
-
     def test_user_can_fetch_all_transactions(self):
 
         response = self.client.get(self.transactions_url)
@@ -153,5 +153,7 @@ class TestTransactions(APITestCase):
         response = self.client.get(self.transaction_url)
         eq_(response.status_code, status.HTTP_200_OK)
 
+    def _set_url(self, reverse_name, **kwargs):
+        return reverse(reverse_name, kwargs={**kwargs})
 
 
