@@ -20,13 +20,16 @@ class UserViewSet(mixins.RetrieveModelMixin,
 
 
 class UserCreateViewSet(mixins.CreateModelMixin,
+                        mixins.ListModelMixin,
                         viewsets.GenericViewSet):
     """
     Creates user accounts
     """
     queryset = User.objects.all()
-    serializer_class = CreateUserSerializer
     permission_classes = (AllowAny,)
+
+    def get_serializer_class(self):
+        return UserSerializer if self.action == "list" else CreateUserSerializer
 
 
 class SendNewPhonenumberVerifyViewSet(mixins.CreateModelMixin,mixins.UpdateModelMixin, viewsets.GenericViewSet):
