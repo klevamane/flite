@@ -1,11 +1,19 @@
-from rest_framework import viewsets, mixins
+from rest_framework import viewsets, mixins, status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from .models import User, NewUserPhoneVerification
-from .permissions import IsUserOrReadOnly
-from .serializers import CreateUserSerializer, UserSerializer, SendNewPhonenumberSerializer
-from rest_framework.views import APIView
+from .models import User, NewUserPhoneVerification, Transaction
+from .permissions import IsUserOrReadOnly, OwnerOnlyPermission
+from .serializers import (
+    CreateUserSerializer,
+    UserSerializer,
+    SendNewPhonenumberSerializer,
+    CreateDepositSerializer,
+    CreateWithdrawalSerializer,
+    CreateP2PSerializer,
+    ListTransactionsSerializer,
+)
 from . import utils
+
 
 class UserViewSet(mixins.RetrieveModelMixin,
                   mixins.UpdateModelMixin,
@@ -19,13 +27,16 @@ class UserViewSet(mixins.RetrieveModelMixin,
 
 
 class UserCreateViewSet(mixins.CreateModelMixin,
+                        mixins.ListModelMixin,
                         viewsets.GenericViewSet):
     """
     Creates user accounts
     """
     queryset = User.objects.all()
-    serializer_class = CreateUserSerializer
     permission_classes = (AllowAny,)
+
+    def get_serializer_class(self):
+        return UserSerializer if self.action == "list" else CreateUserSerializer
 
 
 class SendNewPhonenumberVerifyViewSet(mixins.CreateModelMixin,mixins.UpdateModelMixin, viewsets.GenericViewSet):
@@ -42,15 +53,82 @@ class SendNewPhonenumberVerifyViewSet(mixins.CreateModelMixin,mixins.UpdateModel
         code = request.data.get("code")
 
         if code is None:
-            return Response({"message":"Request not successful"}, 400)    
+            return Response({"message":"Request not successful"}, 400)
 
         if verification_object.verification_code != code:
-            return Response({"message":"Verification code is incorrect"}, 400)    
+            return Response({"message":"Verification code is incorrect"}, 400)
 
         code_status, msg = utils.validate_mobile_signup_sms(verification_object.phone_number, code)
-        
+
         content = {
                 'verification_code_status': str(code_status),
                 'message': msg,
         }
-        return Response(content, 200)    
+        return Response(content, 200)
+
+
+# class DepositCreateViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
+class DepositCreateViewSet(viewsets.ViewSet):
+    permission_classes = (OwnerOnlyPermission,)
+
+    def create(self, request, *args, **kwargs):
+        serializer = CreateDepositSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(request.user)
+        ctx = {
+            "status": "complete",
+            "amount": serializer.data["amount"],
+            "transaction_type": "deposit"
+
+        }
+        return Response(ctx, status=status.HTTP_201_CREATED)
+
+
+class WithdrawalCreateViewSet(viewsets.ViewSet):
+    permission_classes = (OwnerOnlyPermission,)
+
+    def create(self, request, *args, **kwargs):
+        serializer = CreateWithdrawalSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(request.user)
+        ctx = {
+            "status": "complete",
+            "amount": serializer.data["amount"],
+            "transaction_type": "withdrawal"
+
+        }
+        return Response(ctx, status=status.HTTP_201_CREATED)
+
+
+class P2PCreateViewSet(viewsets.ViewSet):
+    permission_classes = (OwnerOnlyPermission, )
+
+    def create(self, request, *args, **kwargs):
+        serializer = CreateP2PSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(request.user, kwargs)
+
+        ctx = {
+            "status": "complete",
+            "amount": serializer.data["amount"],
+            "transaction_type": "p2p transfer"
+        }
+        return Response(ctx, status=status.HTTP_201_CREATED)
+
+
+class ListTransactionsViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    serializer_class = ListTransactionsSerializer
+    permission_classes = (OwnerOnlyPermission,)
+
+    def get_queryset(self):
+        return Transaction.objects.filter(owner=self.request.user).select_subclasses()
+
+
+class RetrieveTransactionViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    serializer_class = ListTransactionsSerializer
+    permission_classes = (OwnerOnlyPermission,)
+    lookup_url_kwarg = "transaction_id"
+
+    def get_queryset(self):
+        return Transaction.objects.filter(owner=self.request.user).select_subclasses()
+

@@ -1,5 +1,9 @@
+import decimal
 import uuid
-from django.db import models
+import secrets
+
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.conf import settings
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractUser
@@ -9,6 +13,10 @@ from rest_framework.authtoken.models import Token
 from flite.core.models import BaseModel
 from phonenumber_field.modelfields import PhoneNumberField
 from django.utils import timezone
+from model_utils.managers import InheritanceManager
+
+from flite.core.utils import FAILURE_MSGS
+
 
 @python_2_unicode_compatible
 class User(AbstractUser):
@@ -24,6 +32,7 @@ def create_auth_token(sender, instance=None, created=False, **kwargs):
         Token.objects.create(user=instance)
         UserProfile.objects.create(user=instance)
         Balance.objects.create(owner=instance)
+
 
 class Phonenumber(BaseModel):
     number = models.CharField(max_length=24)
@@ -73,7 +82,6 @@ class NewUserPhoneVerification(BaseModel):
         verbose_name_plural = "New User Verification Codes"
 
 
-
 class Referral(BaseModel):
     owner = models.OneToOneField('users.User',on_delete=models.CASCADE,related_name="owner")
     referred = models.OneToOneField('users.User',on_delete=models.CASCADE, related_name="referred")
@@ -85,13 +93,84 @@ class Referral(BaseModel):
 class Balance(BaseModel):
 
     owner = models.OneToOneField(User, on_delete=models.CASCADE)
-    book_balance = models.FloatField(default=0.0)
-    available_balance = models.FloatField(default=0.0)
+    book_balance = models.DecimalField(default=0.0, decimal_places=2, max_digits=9)
+    available_balance = models.DecimalField(default=0.0, decimal_places=2, max_digits=9)
     active = models.BooleanField(default=True)
 
     class Meta:
-        verbose_name= "Balance"
+        verbose_name = "Balance"
         verbose_name_plural = "Balances"
+
+    def make_deposit(self, amount):
+        self.available_balance += decimal.Decimal(amount)
+        self.book_balance = self.available_balance
+        self.save()
+        self._make_transaction(
+            amount, Deposit, status="complete", new_balance=self.available_balance
+        )
+
+    def make_withdrawal(self, amount):
+        self._can_debit_or_error(amount)
+        self.available_balance -= decimal.Decimal(amount)
+        self.book_balance = self.available_balance
+        self.save()
+        self._make_transaction(
+            amount, Withdrawal, status="complete", new_balance=self.available_balance
+        )
+
+    def _make_transaction(self, amount, klass, **kwargs):
+        """
+        Creates a transaction with information of
+        passed as attributes passed
+
+        Args:
+            amount(number): The transaction amount
+            klass(class): A model class
+            kwargs(dict): Keyword arguments
+        """
+        tnx = klass(
+            owner=self.owner,
+            amount=amount,
+            reference=make_refernce(klass.__name__.capitalize()),
+            **kwargs
+        )
+        tnx.save()
+
+    def _can_debit_or_error(self, amount):
+        if self.available_balance < amount:
+            raise ValidationError(FAILURE_MSGS["insufficient_funds"])
+
+    def make_p2p_transfer(self, amount, target):
+        self._can_debit_or_error(amount)
+        with transaction.atomic():
+            # lock for update
+            self.get_lock()
+            target.get_lock()
+
+            self.available_balance -= amount
+            target.available_balance += amount
+            self.book_balance -= amount
+            target.book_balance += amount
+            self.save()
+            target.save()
+
+            self._make_transaction(
+                amount,
+                P2PTransfer,
+                sender=self.owner,
+                receipient=target.owner,
+                status="complete",
+                new_balance=self.available_balance,
+            )
+
+    def get_lock(self):
+        Balance.objects.select_for_update().get(id=self.id)
+
+
+def make_refernce(pre, length=11):
+    """Generate a random reference with a starting subject pre"""
+    return "{}{}".format(pre, secrets.token_hex(length))
+
 
 class AllBanks(BaseModel):
 
@@ -118,9 +197,18 @@ class Transaction(BaseModel):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='transaction')
     reference = models.CharField(max_length=200)
     status = models.CharField(max_length=200)
-    amount = models.FloatField(default=0.0)
-    new_balance = models.FloatField(default=0.0)
+    amount = models.DecimalField(default=0.0, decimal_places=2, max_digits=9)
+    new_balance = models.DecimalField(default=0.0, decimal_places=2, max_digits=9)
 
+    objects = InheritanceManager()
+
+
+class Deposit(Transaction):
+    pass
+
+
+class Withdrawal(Transaction):
+    pass
 
 class BankTransfer(Transaction):
     bank = models.ForeignKey(Bank,on_delete=models.CASCADE)
@@ -135,7 +223,6 @@ class P2PTransfer(Transaction):
 
     class Meta:
         verbose_name_plural = "P2P Transfers"
-
 
 
 class Card(models.Model):

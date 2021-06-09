@@ -209,5 +209,6 @@ class Common(Configuration):
         'DEFAULT_AUTHENTICATION_CLASSES': (
             'rest_framework.authentication.SessionAuthentication',
             'rest_framework.authentication.TokenAuthentication',
-        )
+        ),
+        'EXCEPTION_HANDLER': 'flite.core.utils.exception_handler'
     }
