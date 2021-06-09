@@ -1,3 +1,4 @@
+import decimal
 import uuid
 import secrets
 
@@ -13,6 +14,9 @@ from flite.core.models import BaseModel
 from phonenumber_field.modelfields import PhoneNumberField
 from django.utils import timezone
 from model_utils.managers import InheritanceManager
+
+from flite.core.utils import FAILURE_MSGS
+
 
 @python_2_unicode_compatible
 class User(AbstractUser):
@@ -89,8 +93,8 @@ class Referral(BaseModel):
 class Balance(BaseModel):
 
     owner = models.OneToOneField(User, on_delete=models.CASCADE)
-    book_balance = models.FloatField(default=0.0)
-    available_balance = models.FloatField(default=0.0)
+    book_balance = models.DecimalField(default=0.0, decimal_places=2, max_digits=9)
+    available_balance = models.DecimalField(default=0.0, decimal_places=2, max_digits=9)
     active = models.BooleanField(default=True)
 
     class Meta:
@@ -98,7 +102,7 @@ class Balance(BaseModel):
         verbose_name_plural = "Balances"
 
     def make_deposit(self, amount):
-        self.available_balance += amount
+        self.available_balance += decimal.Decimal(amount)
         self.book_balance = self.available_balance
         self.save()
         self._make_transaction(
@@ -107,7 +111,7 @@ class Balance(BaseModel):
 
     def make_withdrawal(self, amount):
         self._can_debit_or_error(amount)
-        self.available_balance -= amount
+        self.available_balance -= decimal.Decimal(amount)
         self.book_balance = self.available_balance
         self.save()
         self._make_transaction(
@@ -134,7 +138,7 @@ class Balance(BaseModel):
 
     def _can_debit_or_error(self, amount):
         if self.available_balance < amount:
-            raise ValidationError("Insuffient funds")
+            raise ValidationError(FAILURE_MSGS["insufficient_funds"])
 
     def make_p2p_transfer(self, amount, target):
         self._can_debit_or_error(amount)
@@ -194,8 +198,8 @@ class Transaction(BaseModel):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='transaction')
     reference = models.CharField(max_length=200)
     status = models.CharField(max_length=200)
-    amount = models.FloatField(default=0.0)
-    new_balance = models.FloatField(default=0.0)
+    amount = models.DecimalField(default=0.0, decimal_places=2, max_digits=9)
+    new_balance = models.DecimalField(default=0.0, decimal_places=2, max_digits=9)
 
     objects = InheritanceManager()
 

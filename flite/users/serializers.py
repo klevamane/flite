@@ -3,6 +3,8 @@ from rest_framework.exceptions import PermissionDenied
 
 from .models import User, NewUserPhoneVerification, UserProfile, Referral, Balance, Transaction
 from . import utils
+from ..core.utils import FAILURE_MSGS, get_or_404
+
 
 class UserSerializer(serializers.ModelSerializer):
 
@@ -71,38 +73,31 @@ class SendNewPhonenumberSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'verification_code')
 
 
-class CreateDepositSerializer(serializers.Serializer):
-    # amount = serializers.DecimalField(max_digits=10, decimal_places=2)
-    amount = serializers.FloatField()
+class DepositWithdrawalBaseSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=1000_000, decimal_places=2)
 
     def validate_amount(self, amount):
         if amount <= 0:
-            raise serializers.ValidationError("Deposit amount must be greater than 0")
+            raise serializers.ValidationError(FAILURE_MSGS["must_be_greater"].format("Deposit", 0))
         return amount
 
+
+class CreateDepositSerializer(DepositWithdrawalBaseSerializer):
     def save(self, user):
         user.balance.make_deposit(self.validated_data["amount"])
 
 
-class CreateWithdrawalSerializer(serializers.Serializer):
-    # amount = serializers.DecimalField(max_digits=10, decimal_places=2)
-    amount = serializers.FloatField()
-
-    def validate_amount(self, amount):
-        if amount <= 0:
-            raise serializers.ValidationError("Deposit amount must be greater than 0")
-        return amount
-
+class CreateWithdrawalSerializer(DepositWithdrawalBaseSerializer):
     def save(self, user):
         user.balance.make_withdrawal(self.validated_data["amount"])
 
 
 class CreateP2PSerializer(serializers.Serializer):
-    amount = serializers.FloatField()
+    amount = serializers.DecimalField(max_digits=1000_000, decimal_places=2)
 
     def validate_amount(self, amount):
         if amount <= 0:
-            raise serializers.ValidationError("A transfer value must greater than 0")
+            raise serializers.ValidationError(FAILURE_MSGS["must_be_greater"].format("Transfer", 0))
         return amount
 
     def save(self, user, kwargs):
@@ -111,43 +106,8 @@ class CreateP2PSerializer(serializers.Serializer):
         if sender.id != user.id:
             raise PermissionDenied()
         if sender == recipient:
-            raise serializers.ValidationError("You cannot make p2p transfer to yourself")
+            raise serializers.ValidationError(FAILURE_MSGS["no_self_p2p"])
         sender.balance.make_p2p_transfer(self.validated_data["amount"], recipient.balance)
-
-
-def get_or_404(klass, title=None, **kwargs):
-    """
-    Use get() to return an object, or raise better custom serializer validation error
-
-    klass is be a Model. title is the subject of the error message if raised,
-    All other passed arguments and keyword arguments are used in the get() query.
-
-    Like with QuerySet.get(), MultipleObjectsReturned is raised if more than
-    one object is found.
-
-    Args:
-        klass(Class): A model class
-        title(str): Title string
-        kwargs(dic): Keyword argument
-    """
-    title = title if title else klass.__name__
-    if not kwargs:
-        raise serializers.ValidationError("include atleast one kwarg search parameter")
-    kwargs_length = len(kwargs)
-    try:
-        return klass.objects.get(**kwargs)
-    except klass.DoesNotExist:
-        search_key, search_value = kwargs.popitem()
-        search_key = search_key.replace("_", " ")
-        if kwargs_length == 1:
-            raise serializers.ValidationError(
-                "{} with {} `{}` does not exist".format(title, search_key, search_value)
-            )
-        raise serializers.ValidationError(
-            "{} with {} `{}` and more search parameters does not exit".format(
-                title, search_key, search_value
-            )
-        )
 
 
 class ListTransactionsSerializer(serializers.ModelSerializer):
@@ -158,9 +118,4 @@ class ListTransactionsSerializer(serializers.ModelSerializer):
 
     def get_type(self, obj):
         return obj.__class__.__name__.lower()
-
-    def validate(self, attrs):
-        print("ATTRIBUTES ")
-
-    # def validate(self, attrs):
 
